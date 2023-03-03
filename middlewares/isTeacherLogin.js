@@ -1,15 +1,15 @@
 const verifyToken = require("../utils/verifyToken");
-const Admin = require("../model/Staff/Admin");
+const Teacher = require("../model/Staff/Teacher");
 
-const isLogin = async (req, res, next) => {
+const isTeacherLogin = async (req, res, next) => {
   //get token from header
   const headerObject = req.headers;
   const token = headerObject?.authorization?.split(" ")[1];
-  //console.log(token);
+  console.log(token);
   //verify token
   const verifiedToken = verifyToken(token);
   if (verifiedToken) {
-    const user = await Admin.findById(verifiedToken.id).select(
+    const user = await Teacher.findById(verifiedToken.id).select(
       "email name role"
     );
     //save the user into req.body
@@ -18,8 +18,9 @@ const isLogin = async (req, res, next) => {
    
   } else {
     const err = new Error("Token Expired");
+
     next(err);
   }
 };
 
-module.exports = isLogin;
+module.exports = isTeacherLogin;

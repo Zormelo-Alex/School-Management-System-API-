@@ -1,9 +1,8 @@
-const mongoose = require("mongoose");
 const Admin = require("../../model/Staff/Admin");
 const AsyncHandler = require("express-async-handler");
 const generateToken = require("../../utils/generateToken");
 const verifyToken = require("../../utils/verifyToken");
-
+const { hashPassword, verifyPassword } = require("../../utils/helper");
 
 //Desc Register controller
 //@route POST /api/v1/admin/register
@@ -11,15 +10,17 @@ const verifyToken = require("../../utils/verifyToken");
 exports.registerAdminCtrl = AsyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
   //checking if email exit
+
   const userFound = await Admin.findOne({ email });
   if (userFound) {
     //return res.json({ message: "Admin Exited" });
     throw new Error("Admins Exits");
   }
+
   //register
   const user = await Admin.create({
     email,
-    password,
+    password: await hashPassword(password),
     name,
   });
   res.status(201).json({
@@ -35,25 +36,21 @@ exports.loginAdminCtrl = AsyncHandler(async (req, res) => {
   const { email, password } = req.body;
   //checking if email exit
   const user = await Admin.findOne({ email });
+
   if (!user) {
     return res.json({
       message: "Invalid Login crendetial",
     });
   }
-  if (user && (await user.verifyPassword(password))) {
-    //assigning generated token
-    const token = generateToken(user._id);
-    // verifying token
-    const verify = verifyToken(token);
-    console.log(verify);
-    return res.json({
-      data: generateToken(user._id),
-      user,
-      verify,
-    });
+  //verifying password
+  const isMatch = await verifyPassword(password, user.password);
+  console.log(isMatch);
+  if (!isMatch) {
+    return res.json({ message: "Invalid Credential" });
   } else {
     return res.json({
-      message: "Invalid Login crendetial",
+      data: generateToken(user._id),
+      message: "Admin Logged successfully",
     });
   }
 });
@@ -61,48 +58,88 @@ exports.loginAdminCtrl = AsyncHandler(async (req, res) => {
 //Desc Get Admins  controller
 //@route GET /api/v1/admin/
 //@access Private
-exports.getAdmins = async (req, res) => {
-  try {
+exports.getAdmins = AsyncHandler(async (req, res) => {
+  const admins = await Admin.find().select("-password -createdAt -updatedAt");
+  res.status(200).json({
+    status: "success",
+    message: "Admins fetched successfully",
+    data: admins,
+  });
+});
+//Desc Get Get Admin Profile  controller
+//@route GET /api/v1/admin/profile
+//@access Private
+exports.getAdminProfile = AsyncHandler(async (req, res) => {
+  //console.log(req.useAuth);
+  const user = await Admin.findById(req.useAuth._id)
+    .select("-password -createdAt -updatedAt")
+    .populate("academicYears")
+    .populate("academicTerms")
+    .populate("classLevels");
+  if (!user) {
+    res.status(404).json({
+      message: "Admin Not found",
+    });
+  } else {
     res.status(200).json({
       status: "Success",
-      data: "All Admins ",
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
+      message: "Admin fetched successfully",
+      data: user,
     });
   }
-};
-//Desc Get Single Admin  controller
-//@route GET /api/v1/admin/:adminID
-//@access Private
-exports.getSingleAdmin = AsyncHandler(
-  async ( req, res ) => {
-      console.log(req.useAuth)
-      res.status(201).json({
-        status: "success",
-        data: "Single Admins",
-    
-      });
-    }
-)
+});
 
 //Desc Update Admin  controller
 //@route PUT /api/v1/admin/:adminID
 //@access Private
-exports.updateAdmin = async (req, res) => {
-  try {
-    res.status(201).json({
-      status: "success",
-      data: "Update Admins",
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "failed",
-      error: error.message,
-    });
+exports.updateAdmin = AsyncHandler(async (req, res) => {
+  const { email, name, password } = req.body;
+  //checking if admin user exit
+  //const adminFound = await Admin.findById(useAuth._id);
+  //checking if email used
+  const emailExit = await Admin.findOne({ email });
+  console.log(emailExit);
+  if (emailExit) {
+    throw new Error("Email already taken");
+  } else {
+    if (password) {
+      const admin = await Admin.findByIdAndUpdate(
+        req.useAuth._id,
+        {
+          email,
+          name,
+          password: await hashPassword(password),
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+      res.status(200).json({
+        status: "success",
+        message: "Admin Updated Successfull",
+        data: admin,
+      });
+    } else {
+      const admin = await Admin.findByIdAndUpdate(
+        req.useAuth._id,
+        {
+          email,
+          name,
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+      res.status(200).json({
+        status: "success",
+        message: "Admin Updated Successfull",
+        data: admin,
+      });
+    }
   }
-};
+});
 //Desc Delete Admin  controller
 //@route DELETE /api/v1/admin/:adminID
 //@access Private
